@@ -17,6 +17,7 @@ type ListenerStates = Arc<ListenerStatesMutex>;
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let args = std::env::args();
+    // TODO: global state (all counts)
     let listener_states =
         ListenerStates::new(ListenerStatesMutex::new(ListenerStatesHashMap::new()));
     let mut listeners: Vec<JoinHandle<Result<()>>> = Vec::new();
@@ -24,9 +25,11 @@ async fn main() -> std::io::Result<()> {
         // TODO: allow passing only port
         let ls = listener_states.clone();
         listeners.push(tokio::spawn(async move {
-            let listener = tokio::net::TcpListener::bind(arg).await?;
+            let arg = arg.clone();
+            let listener = tokio::net::TcpListener::bind(&arg).await?;
             loop {
-                let (mut socket, addr) = listener.accept().await?;
+                let (mut socket, _) = listener.accept().await?;
+                let addr: SocketAddr = arg.parse().unwrap();
                 let mut string = String::new();
                 socket.read_to_string(&mut string).await?;
                 println!("{}", string);

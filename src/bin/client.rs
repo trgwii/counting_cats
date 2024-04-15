@@ -37,10 +37,10 @@ async fn main() -> std::io::Result<()> {
             };
             println!("{}", std::str::from_utf8(buf).unwrap());
             conn.write_all(buf).await?;
+            conn.shutdown().await?;
             let mut s = String::new();
             conn.read_to_string(&mut s).await?;
             println!("{}", s);
-            conn.shutdown().await?;
             Ok(())
         }))
     }
