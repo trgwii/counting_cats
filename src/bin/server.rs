@@ -1,3 +1,4 @@
+use tokio::io::BufWriter;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use std::collections::HashMap;
@@ -42,9 +43,11 @@ async fn main() -> std::io::Result<()> {
             let listener = tokio::net::TcpListener::bind(&arg).await?;
             loop {
                 let (mut socket, _) = listener.accept().await?;
+                let (mut read_socket, write_socket) = socket.split();
+                let mut bw = BufWriter::new(write_socket);
                 let addr: SocketAddr = arg.parse().unwrap();
                 let mut string = String::new();
-                socket.read_to_string(&mut string).await?;
+                read_socket.read_to_string(&mut string).await?;
                 println!("{}", string);
                 let response = {
                     let mut ls = ls.lock().unwrap();
@@ -84,7 +87,8 @@ async fn main() -> std::io::Result<()> {
                     response
                 };
                 println!("{}", response);
-                socket.write_all(response.as_bytes()).await?;
+                bw.write_all(response.as_bytes()).await?;
+                bw.flush().await?;
                 socket.shutdown().await?;
             }
         }));
