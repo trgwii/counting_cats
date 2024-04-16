@@ -1,4 +1,6 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
+use tokio::task::JoinHandle;
 
 #[derive(serde::Deserialize, std::fmt::Debug)]
 struct Endpoint {
@@ -9,10 +11,10 @@ struct Endpoint {
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let config: Vec<Endpoint> = serde_json::from_reader(std::io::stdin())?;
-    let mut connections: Vec<tokio::task::JoinHandle<std::io::Result<()>>> = Vec::new();
+    let mut connections: Vec<JoinHandle<std::io::Result<()>>> = Vec::new();
     for endpoint in config {
         connections.push(tokio::spawn(async move {
-            let mut conn = tokio::net::TcpStream::connect(endpoint.socket_address).await?;
+            let mut conn = TcpStream::connect(endpoint.socket_address).await?;
             let mut u: Vec<u8> = Vec::new();
             let buf = match endpoint.request {
                 serde_json::Value::String(s) => {
@@ -35,7 +37,6 @@ async fn main() -> std::io::Result<()> {
                 }
                 _ => panic!("Invalid request value"),
             };
-            println!("{}", std::str::from_utf8(buf).unwrap());
             conn.write_all(buf).await?;
             conn.shutdown().await?;
             let mut s = String::new();
