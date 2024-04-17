@@ -89,7 +89,11 @@ async fn main() -> io::Result<()> {
             }
         }));
     }
+    let listeners_len = listeners.len();
     let file_writer = tokio::spawn(async move {
+        if listeners_len == 0 {
+            return;
+        }
         loop {
             let json_string = {
                 let gs = global_state_file_writer.lock().unwrap();
