@@ -65,30 +65,15 @@ async fn main() -> io::Result<()> {
                         let state = match ls.get_mut(&addr) {
                             Some(map) => map,
                             None => {
-                                match ls.insert(addr, HashMap::<String, u64>::new()) {
-                                    Some(_) => unreachable!(),
-                                    None => (),
-                                };
-                                match ls.get_mut(&addr) {
-                                    Some(map) => map,
-                                    None => unreachable!(),
-                                }
+                                assert!(ls.insert(addr, HashMap::<String, u64>::new()).is_none());
+                                ls.get_mut(&addr).unwrap()
                             }
                         };
                         let segments: Vec<&str> = string.split(' ').collect();
-                        let amount: u64 = match segments[0].parse() {
-                            Ok(s) => s,
-                            Err(_) => unreachable!(),
-                        };
+                        let amount: u64 = segments[0].parse().unwrap();
                         let animal: String = String::from(segments[1]);
-                        let val = match state.get(&animal) {
-                            Some(n) => *n,
-                            None => 0,
-                        };
-                        let global_val = match gs.state.get(&animal) {
-                            Some(n) => *n,
-                            None => 0,
-                        };
+                        let val = *state.get(&animal).unwrap_or(&0);
+                        let global_val = *gs.state.get(&animal).unwrap_or(&0);
                         state.insert(animal.clone(), val + amount);
                         gs.state.insert(animal, global_val + amount);
                         gs.changed = true;
@@ -116,32 +101,23 @@ async fn main() -> io::Result<()> {
             };
             if json_string.len() > 0 {
                 {
-                    let last_written = {
-                        let gs = global_state_file_writer.lock().unwrap();
-                        gs.last_written
-                    };
-                    if last_written >= SystemTime::now().sub(Duration::from_secs(5)) {
-                        tokio::time::sleep(Duration::from_millis(1)).await;
-                        continue;
+                    let last_written = global_state_file_writer.lock().unwrap().last_written;
+                    if last_written < SystemTime::now().sub(Duration::from_secs(5)) {
+                        if let Ok(_) = tokio::fs::write("global_state.json", &json_string).await {
+                            let mut gs = global_state_file_writer.lock().unwrap();
+                            gs.changed = false;
+                            gs.last_written = SystemTime::now();
+                            println!("Wrote to global_state.json: {}", json_string);
+                        }
                     }
                 }
-                match tokio::fs::write("global_state.json", &json_string).await {
-                    Ok(_) => {
-                        let mut gs = global_state_file_writer.lock().unwrap();
-                        gs.changed = false;
-                        gs.last_written = SystemTime::now();
-                    }
-                    Err(e) => println!("Failed to write output file: {}", e),
-                };
-
-                println!("Wrote to global_state.json: {}", json_string);
             }
             tokio::time::sleep(Duration::from_millis(1)).await;
         }
     });
     for listener in listeners {
-        tokio::try_join!(listener)?.0?;
+        listener.await??;
     }
-    tokio::try_join!(file_writer)?;
+    file_writer.await?;
     Ok(())
 }
